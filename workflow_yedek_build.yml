@@ -1,0 +1,60 @@
+name: APK derle
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android SDK lisansları
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Vosk Türkçe modelini indir
+        run: |
+          set -e
+          mkdir -p app/src/main/assets
+          curl -L --retry 3 -o model.zip https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip
+          unzip -q model.zip -d model_tmp
+          rm -rf app/src/main/assets/model
+          mv model_tmp/* app/src/main/assets/model
+          uuidgen > app/src/main/assets/model/uuid
+          ls app/src/main/assets/model
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: APK derle
+        run: gradle --no-daemon assembleDebug
+
+      - name: APK adını düzenle
+        run: cp app/build/outputs/apk/debug/app-debug.apk Mecnun.apk
+
+      - name: APK'yı artifact olarak yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mecnun-apk
+          path: Mecnun.apk
+
+      - name: Release oluştur (telefondan direkt indirmek için)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Mecnun build ${{ github.run_number }}
+          files: Mecnun.apk
